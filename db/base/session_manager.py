@@ -2,7 +2,7 @@ from contextlib import contextmanager
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, scoped_session
 from ..models import Base
-
+import os
 
 class SessionManager:
     """
@@ -21,6 +21,23 @@ class SessionManager:
         Args:
             db_path: 数据库连接路径
         """
+        # 解析 SQLite 路径并创建目录
+        if db_path.startswith('sqlite:///'):
+        # 去掉 sqlite:/// 前缀
+            path_part = db_path[10:]
+        
+        # 处理绝对路径情况（sqlite:////absolute/path）
+        if path_part.startswith('/'):
+            file_path = path_part
+        else:
+            # 相对路径，转为绝对路径处理
+            file_path = os.path.abspath(path_part)
+        
+        # 获取目录路径并创建
+        dir_path = os.path.dirname(file_path)
+        if dir_path and not os.path.exists(dir_path):
+            os.makedirs(dir_path, exist_ok=True)
+
         self.engine = create_engine(db_path)
         Base.metadata.create_all(self.engine)
         self.Session = scoped_session(sessionmaker(bind=self.engine))
