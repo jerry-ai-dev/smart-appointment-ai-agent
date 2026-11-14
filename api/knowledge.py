@@ -3,16 +3,24 @@
 """
 from fastapi import APIRouter, HTTPException
 from typing import List, Dict, Any
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 
 router = APIRouter(prefix="/api/knowledge", tags=["知识库管理"])
 
 
 class KnowledgeItem(BaseModel):
     id: int = None
-    question: str
-    answer: str
+    question: str = Field(min_length=1)
+    answer: str = Field(min_length=1)
     category: str = "general"
+
+    @field_validator("question", "answer")
+    @classmethod
+    def reject_blank(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("不能为空")
+        return value
 
 
 class SearchRequest(BaseModel):
@@ -71,18 +79,25 @@ async def get_knowledge(knowledge_id: int):
 async def add_knowledge(item: KnowledgeItem):
     """添加新的知识条目"""
     try:
-        knowledge_service = await app.get_knowledge_service()
+        from services.knowledge_service import KnowledgeService
+        knowledge_service = KnowledgeService()
+        if not knowledge_service.initialized:
+            await knowledge_service.initialize()
         # 将问答组合成文档内容
         content = f"问题: {item.question}\n答案: {item.answer}"
         result = await knowledge_service.add_document(
             content=content,
             category=item.category
         )
+        if not result:
+            raise HTTPException(status_code=500, detail="知识条目保存失败")
         return {
             "status": "success",
             "message": "知识条目添加成功",
             "data": result
         }
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"添加知识条目失败: {str(e)}")
 
